@@ -1,4 +1,4 @@
-#    Copyright 2013 - 2017 Mirantis, Inc.
+#    Copyright 2017 Mirantis, Inc.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,14 +12,14 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from devops.driver.libvirt.libvirt_driver import \
-    LibvirtDiskDevice as DiskDevice
-from devops.driver.libvirt.libvirt_driver import LibvirtDriver as Driver
-from devops.driver.libvirt.libvirt_driver import LibvirtInterface as Interface
-from devops.driver.libvirt.libvirt_driver import \
-    LibvirtL2NetworkDevice as L2NetworkDevice
-from devops.driver.libvirt.libvirt_driver import LibvirtVolume as Volume
-from devops.driver.libvirt.libvirt_driver import LibvirtNode as Node
+
+from devops.models import DiskDevice
+from devops_driver_ironic.ironic_driver import IronicDriver as Driver
+from devops_driver_ironic.ironic_driver \
+    import IronicL2NetworkDevice as L2NetworkDevice
+from devops_driver_ironic.ironic_driver import IronicNode as Node
+from devops_driver_ironic.ironic_driver import IronicVolume as Volume
+from devops_driver_ironic.ironic_driver import IronicInterface as Interface
 
 __all__ = [
     'DiskDevice',

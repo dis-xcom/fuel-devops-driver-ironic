@@ -29,7 +29,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
 
     package_data={
-        'devops-driver-ironic': ['templates/*.yaml', 'templates/*.yml']},
+        'devops_driver_ironic': ['templates/*.yaml', 'templates/*.yml']},
     install_requires=[
         'fuel-devops>=3.0.3',
         'python-ironicclient>=1.6.0',
