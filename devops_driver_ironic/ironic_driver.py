@@ -12,30 +12,14 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import datetime
-import itertools
 import os
-import re
 import shutil
-import time
-import uuid
-import warnings
-# noinspection PyPep8Naming
-import xml.etree.ElementTree as ET
 
 from django.conf import settings
-from django.utils import functional
 from ironicclient import client
-import netaddr
-import paramiko
 
-from devops.driver.libvirt import libvirt_xml_builder as builder
-from devops import error
 from devops.helpers import cloud_image_settings
-from devops.helpers import decorators
 from devops.helpers import helpers
-from devops.helpers import scancodes
-from devops.helpers import ssh_client
 from devops.helpers import subprocess_runner
 from devops import logger
 from devops.models import base
@@ -65,16 +49,11 @@ class IronicDriver(driver.Driver):
             ironic_url=self.ironic_url,
         )
 
-    #def node_list(self):
-    #    # virConnect.listDefinedDomains() only returns stopped domains
-    #    #   https://bugzilla.redhat.com/show_bug.cgi?id=839259
-    #    return [item.name() for item in self.conn.listAllDomains()]
-
-
 
 class IronicL2NetworkDevice(network.L2NetworkDevice):
     """Note: This class is imported as L2NetworkDevice at .__init__.py """
     pass
+
 
 class IronicVolume(volume.Volume):
     """Note: This class is imported as Volume at .__init__.py """
@@ -97,9 +76,7 @@ class IronicNode(node.Node):
     cloud_init_volume_name = base.ParamField()
     cloud_init_iface_up = base.ParamField()
 
-
     ironic_driver = base.ParamField(default='agent_ipmitool')
-
 
     boot = base.ParamField(default='pxe')
     force_set_boot = base.ParamField(default=True)
@@ -110,24 +87,13 @@ class IronicNode(node.Node):
     ipmi_lan_interface = base.ParamField(default="lanplus")
     ipmi_port = base.ParamField(default=623)
 
-
-    #@decorators.retry(libvirt.libvirtError)
     def exists(self):
         """Check if node exists
 
             :rtype : Boolean
         """
         pass
-        #try:
-        #    self.driver.conn.lookupByUUIDString(self.uuid)
-        #    return True
-        #except libvirt.libvirtError as e:
-        #    if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
-        #        return False
-        #    else:
-        #        raise
 
-    # @decorators.retry(libvirt.libvirtError)
     def is_active(self):
         """Check if node is active
 
@@ -136,52 +102,42 @@ class IronicNode(node.Node):
         pass
         # return bool(self._libvirt_node.isActive())
 
-    #def send_keys(self, keys):
-    #    """Send keys to node
+    @property
+    def ironic_node_name(self):
+        return helpers.underscored(
+            helpers.deepgetattr(self, 'group.environment.name'),
+            self.name,
+        )
 
-    #    :type keys: String
-    #        :rtype : None
-    #    """
-    #    key_codes = scancodes.from_string(str(keys))
-    #    for key_code in key_codes:
-    #        if isinstance(key_code[0], str):
-    #            if key_code[0] == 'wait':
-    #                time.sleep(1)
-    #            continue
-    #        self._libvirt_node.sendKey(0, 0, list(key_code), len(key_code), 0)
-
-    #@decorators.retry()
     def define(self):
         """Define node
 
             :rtype : None
         """
-        ironic_node_name = helpers.underscored(
-            helpers.deepgetattr(self, 'group.environment.name'),
-            self.name,
-        )
 
         root_volume = self.get_volume(name=self.root_volume_name)
 
         # Necessary only once, when node is registered to ironic
         node = self.driver.conn.node.create(
             driver=self.ironic_driver,
-            driver_info = {
-                name = ironic_node_name,
-                deploy_kernel = self.driver.agent_kernel_url,
-                deploy_ramdisk = self.driver.agent_ramdisk_url,
-                ipmi_address = self.ipmi_host,
-                ipmi_username = self.ipmi_user,
-                ipmi_password = self.ipmi_password,
+            driver_info={
+                'name': self.ironic_node_name,
+                'deploy_kernel': self.driver.agent_kernel_url,
+                'deploy_ramdisk': self.driver.agent_ramdisk_url,
+                'ipmi_address': self.ipmi_host,
+                'ipmi_username': self.ipmi_user,
+                'ipmi_password': self.ipmi_password,
             }
         )
+        logger.debug("Created Ironic node: {0}".format(node))
 
         for interface in self.interfaces:
             if interface.mac_address:
-                self.driver.conn.port.create(
+                port = self.driver.conn.port.create(
                     node_uuid=node.uuid,
                     address=interface.mac_address,
                 )
+                logger.debug("Created Ironic node port: {0}".format(port))
 
         # Necessary for each deploy/redeploy
         patch = [
@@ -201,41 +157,42 @@ class IronicNode(node.Node):
                 'op': 'add'
             }
         ]
-        self.driver.conn.node.update(
+
+        logger.debug("Updating Ironic node with: {0}".format(patch))
+        updated_node = self.driver.conn.node.update(
             node.uuid,
             patch=patch,
         )
+        logger.debug("Updated Ironic node: {0}".format(updated_node))
 
-        ############################# TODO: node-set-provision-state
+        # TODO(ddmitriev): node-set-provision-state
 
         if self.cloud_init_volume_name is not None:
-            self._create_cloudimage_settings_iso()
+            configdrive = self.__create_configdrive()
+        else:
+            configdrive = None
+
+        self.driver.conn.node.set_provision_state(
+            node_uuid=node.uuid,
+            configdrive=configdrive,
+            state='active',
+        )
+        logger.debug("Set provision state to 'active' for node {0} {1}"
+                     .format(node.name, node.uuid))
 
         super(IronicNode, self).define()
 
     def start(self):
         # power on
-        #self.create()
+        # self.create()
         pass
 
-    #@decorators.retry(libvirt.libvirtError)
     def destroy(self, *args, **kwargs):
         if self.is_active():
             pass
 
-        #    try:
-        #        self._libvirt_node.destroy()
-        #    except libvirt.libvirtError as e:
-        #        if e.get_error_code() == libvirt.VIR_ERR_SYSTEM_ERROR:
-        #            logger.error(
-        #                "Error appeared while destroying the domain"
-        #                " {}, ignoring".format(self._libvirt_node.name()))
-        #            return None
-        #        else:
-        #            raise
         super(IronicNode, self).destroy()
 
-    #@decorators.retry(libvirt.libvirtError)
     def remove(self, *args, **kwargs):
         if self.uuid:
             if self.exists():
@@ -243,35 +200,35 @@ class IronicNode(node.Node):
 
         super(IronicNode, self).remove()
 
-
-    #@decorators.retry(libvirt.libvirtError)
     def reboot(self):
         """Reboot node
 
             :rtype : None
         """
-        #self._libvirt_node.reboot()
+        # self._libvirt_node.reboot()
         super(IronicNode, self).reboot()
 
-    #@decorators.retry(libvirt.libvirtError)
     def shutdown(self):
         """Shutdown node
 
             :rtype : None
         """
-        #self._libvirt_node.shutdown()
+        # self._libvirt_node.shutdown()
         super(IronicNode, self).shutdown()
 
-    #@decorators.retry(libvirt.libvirtError)
     def reset(self):
-        #self._libvirt_node.reset()
+        # self._libvirt_node.reset()
         super(IronicNode, self).reset()
 
-    def _create_cloudimage_settings_iso(self):
-        """Builds setting iso to send basic configuration for cloud image"""
+    def __create_configdrive(self):
+        """Builds setting iso to send basic configuration for cloud image
+
+        Returns a gzipped, base64-encoded configuration drive string.
+        """
 
         if self.cloud_init_volume_name is None:
-            return
+            return None
+
         volume = self.get_volume(name=self.cloud_init_volume_name)
 
         interface = self.interface_set.get(
@@ -282,7 +239,7 @@ class IronicNode(node.Node):
         env_name = self.group.environment.name
         dir_path = os.path.join(settings.CLOUD_IMAGE_DIR, env_name)
         cloud_image_settings_path = os.path.join(
-            dir_path, 'cloud_settings.iso')
+            dir_path, 'configdrive_{0}.iso'.format(self.ironic_node_name))
         meta_data_path = os.path.join(dir_path, "meta-data")
         user_data_path = os.path.join(dir_path, "user-data")
 
@@ -307,11 +264,14 @@ class IronicNode(node.Node):
             user_data_content=volume.cloudinit_user_data,
         )
 
-        volume.upload(cloud_image_settings_path)
+        cmd = 'gzip -9 -c {0} | base64'.format(cloud_image_settings_path)
+        result = subprocess_runner.Subprocess.check_call(cmd)
 
         # Clear temporary files
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
+
+        return result['stdout']
 
 
 class IronicInterface(network.Interface):
