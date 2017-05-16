@@ -24,6 +24,9 @@ Install fuel-devops and fuel-devops-driver-ironic
     pip install git+git://github.com/dis-xcom/fuel-devops-driver-ironic.git
     dos-manage.py migrate
 
+    # Clone the repo to use devops templates from them
+    git clone https://github.com/dis-xcom/fuel-devops-driver-ironic
+
 [optional] Create a node with Ironic standalone service
 -------------------------------------------------------
 
@@ -34,8 +37,6 @@ To do it, a single-VM fuel-devops environment will be used:
 
     wget https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img \
         -O /tmp/xenial-server-cloudimg-amd64.qcow2
-    git clone https://github.com/dis-xcom/fuel-devops-driver-ironic
-
 
     export BAREMETAL_ADMIN_IFACE=enp8s0f1  # Interface on this fuel-devops node
                                            # that have access to PXE network for provisioning.
