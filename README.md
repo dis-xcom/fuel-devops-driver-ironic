@@ -4,6 +4,10 @@ Driver for fuel-devops to manage baremetal nodes using existing Ironic service
 Example for using with Ironic standalone service
 ------------------------------------------------
 
+In this example, will be created two fuel-devops environments:
+- first with Ironic standalone service [optional]
+- second is for baremetal deploy using the existing Ironic service
+
 1. Install fuel-devops and fuel-devops-driver-ironic
 ----------------------------------------------------
 
