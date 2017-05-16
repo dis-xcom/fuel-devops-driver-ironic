@@ -8,8 +8,8 @@ In this example, will be created two fuel-devops environments:
 - first with Ironic standalone service [optional]
 - second is for baremetal deploy using the existing Ironic service
 
-1. Install fuel-devops and fuel-devops-driver-ironic
-----------------------------------------------------
+Install fuel-devops and fuel-devops-driver-ironic
+-------------------------------------------------
 
     sudo apt-get install --yes \
         git libyaml-dev libffi-dev python-dev python-pip \
@@ -24,8 +24,8 @@ In this example, will be created two fuel-devops environments:
     pip install git+git://github.com/dis-xcom/fuel-devops-driver-ironic.git
     dos-manage.py migrate
 
-2. [optional] Create a node with Ironic standalone service
-----------------------------------------------------------
+[optional] Create a node with Ironic standalone service
+-------------------------------------------------------
 
 You can use the steps from here: https://github.com/dis-xcom/underpillar ,
 or create a VM for ironic service using the devops template from this repo.
@@ -60,14 +60,14 @@ means that the Ironic has been deployed successfully.
     ironic driver-list
 
 
-3. Deploy baremetal nodes with Ironic
--------------------------------------
+Deploy baremetal nodes with Ironic
+----------------------------------
 
 IRONIC_URL is used to access Ironic API from fuel-devops.
 IRONIC_PXE_INTERFACE_ADDRESS is an address assigned to the interface on the Ironic node
 which is used for DHCP/PXE/HTTP access from the deploying baremetal nodes.
 
-If Ironic node was created in step #2, then on this node
+If Ironic node was created at the previous step, then on this node
 ens3 will have the IP 10.50.0.2/24 for external access (from the host),
 ens4 will have 10.0.175.2 as a DHCP/PXE/HTTP server.
 
