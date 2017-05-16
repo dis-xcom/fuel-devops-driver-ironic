@@ -1,0 +1,81 @@
+aliases:
+
+  dynamic_address_pool:
+   - &pool_default !os_env POOL_DEFAULT, 10.109.0.0/16:24
+
+  default_interface_model:
+   - &interface_model !os_env INTERFACE_MODEL, e1000
+
+template:
+  devops_settings:
+    env_name: !os_env ENV_NAME, baremetal_lab_deploy
+
+    address_pools:
+    # Network pools used by the environment
+      admin-pool01:
+        net: *pool_default
+        params:
+          vlan_start: 0
+
+    groups:
+     - name: ironic-rack-01
+       driver:
+         name: devops_driver_ironic
+         params:
+           os_auth_token: fake-token
+           ironic_url: !os_env IRONIC_URL  # URL that will be used by fuel-devops
+                                           # to access Ironic API
+
+           # Agent URL that is accessible from deploying node when nodes
+           # are bootstrapped with PXE. Usually PXE/provision network address is used.
+           agent_kernel_url: !os_env IRONIC_AGENT_KERNEL_URL
+           agent_ramdisk_url: !os_env IRONIC_AGENT_RAMDISK_URL
+
+       network_pools:
+         admin: admin-pool01
+
+       l2_network_devices:
+         switch01:
+           address_pool: admin-pool01
+
+       nodes:
+        - name: slave01  # Do not use underscores for Ironic node names
+          role: mcp_slave
+          params:
+            ipmi_user: !os_env SLAVE01_IPMI_USER
+            ipmi_password: !os_env SLAVE01_IPMI_PASSWORD
+            ipmi_previlegies: OPERATOR
+            ipmi_host: !os_env SLAVE01_IPMI_HOST  # hostname or IP address
+            ipmi_lan_interface: lanplus
+            ipmi_port: 623
+
+            root_volume_name: system     # see 'volumes' below
+            cloud_init_volume_name: iso  # see 'volumes' below
+            cloud_init_iface_up: enp8s0f1  # see 'interfaces' below.
+                                           # this interface is passed to 'user-data'
+                                           # to substitute {interface_name} variable if it is used there
+
+            volumes:
+              - name: system
+                capacity: !os_env NODE_VOLUME_SIZE, 200
+
+                # The same as for agent URL, here is an URL to the image that should be
+                # used for deploy the node. It should also be accessible from deploying
+                # node when nodes are provisioned by agent. Usually PXE/provision network address is used.
+                source_image: !os_env IRONIC_SOURCE_IMAGE_URL
+                source_image_checksum: !os_env IRONIC_SOURCE_IMAGE_CHECKSUM
+
+              - name: iso  # Volume with name 'iso' will be used
+                           # for store image with cloud-init metadata.
+                cloudinit_meta_data: !include deploy_nodes--meta-data.yaml
+                cloudinit_user_data: !include deploy_nodes--user-data.yaml
+
+            interfaces:
+             - label: enp8s0f1
+               l2_network_device: switch01    # switch name. It is *NOT* a Nailgun network
+               mac_address: !os_env SLAVE01_PXE_MAC_ADDRESS
+
+            network_config:
+              enp8s0f1:
+                networks:
+                 - admin  ## OpenStack network, NOT switch name

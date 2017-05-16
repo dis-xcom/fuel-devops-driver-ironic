@@ -17,7 +17,7 @@ import setuptools
 
 setuptools.setup(
     name='fuel-devops-driver-ironic',
-    version='0.1.0',
+    version='0.1.1',
     description=('Driver for fuel-devops to manage baremetal nodes using '
                  'existing Ironic service'),
     author='Mirantis, Inc.',

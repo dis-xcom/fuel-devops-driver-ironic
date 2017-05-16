@@ -1,4 +1,4 @@
-#    Copyright 2013 - 2016 Mirantis, Inc.
+#    Copyright 2013 - 2017 Mirantis, Inc.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -44,10 +44,9 @@ class IronicDriver(driver.Driver):
     @property
     def conn(self):
         """Connection to ironic api"""
-        return client.get_client(
-            os_auth_token=self.os_auth_token,
-            ironic_url=self.ironic_url,
-        )
+        kwargs = {'os_auth_token': self.os_auth_token,
+                  'ironic_url': self.ironic_url}
+        return client.get_client(1, **kwargs)
 
 
 class IronicL2NetworkDevice(network.L2NetworkDevice):
@@ -92,22 +91,24 @@ class IronicNode(node.Node):
 
             :rtype : Boolean
         """
-        pass
+        return any([self.uuid == node.uuid
+                    for node in self.driver.conn.node.list()])
 
     def is_active(self):
         """Check if node is active
 
             :rtype : Boolean
         """
-        pass
-        # return bool(self._libvirt_node.isActive())
+        states = self.driver.conn.node.states(self.uuid)
+        return (states['provision_state'] == 'active' and
+                states['power_state'] == 'power on')
 
     @property
     def ironic_node_name(self):
         return helpers.underscored(
             helpers.deepgetattr(self, 'group.environment.name'),
             self.name,
-        )
+        ).replace("_", "-")
 
     def define(self):
         """Define node
@@ -120,8 +121,8 @@ class IronicNode(node.Node):
         # Necessary only once, when node is registered to ironic
         node = self.driver.conn.node.create(
             driver=self.ironic_driver,
+            name=self.ironic_node_name,
             driver_info={
-                'name': self.ironic_node_name,
                 'deploy_kernel': self.driver.agent_kernel_url,
                 'deploy_ramdisk': self.driver.agent_ramdisk_url,
                 'ipmi_address': self.ipmi_host,
@@ -180,45 +181,71 @@ class IronicNode(node.Node):
         logger.debug("Set provision state to 'active' for node {0} {1}"
                      .format(node.name, node.uuid))
 
+        self.uuid = node.uuid
         super(IronicNode, self).define()
 
     def start(self):
-        # power on
-        # self.create()
-        pass
+        """Start the node (power on)"""
+        self.driver.conn.node.set_power_state(
+            node_id=self.uuid,
+            state='on',
+        )
+        super(IronicNode, self).start()
 
     def destroy(self, *args, **kwargs):
-        if self.is_active():
-            pass
-
+        """Stop the node (power off)"""
         super(IronicNode, self).destroy()
+        self.driver.conn.node.set_power_state(
+            node_id=self.uuid,
+            state='off',
+            soft=False,
+        )
 
     def remove(self, *args, **kwargs):
+        super(IronicNode, self).remove()
         if self.uuid:
             if self.exists():
                 self.destroy()
 
-        super(IronicNode, self).remove()
+            self.driver.conn.node.set_maintenance(
+                node_id=self.uuid,
+                state=True,
+                maint_reason="Removing the node from devops environment")
+            self.driver.conn.node.delete(self.uuid)
+
 
     def reboot(self):
-        """Reboot node
+        """Reboot node gracefully
 
             :rtype : None
         """
-        # self._libvirt_node.reboot()
         super(IronicNode, self).reboot()
+        self.driver.conn.node.set_power_state(
+            node_id=self.uuid,
+            state='reboot',
+            soft=True,
+        )
 
     def shutdown(self):
-        """Shutdown node
+        """Shutdown node gracefully
 
             :rtype : None
         """
-        # self._libvirt_node.shutdown()
         super(IronicNode, self).shutdown()
+        self.driver.conn.node.set_power_state(
+            node_id=self.uuid,
+            state='off',
+            soft=True,
+        )
 
     def reset(self):
-        # self._libvirt_node.reset()
+        """Reboot node"""
         super(IronicNode, self).reset()
+        self.driver.conn.node.set_power_state(
+            node_id=self.uuid,
+            state='reboot',
+            soft=False,
+        )
 
     def __create_configdrive(self):
         """Builds setting iso to send basic configuration for cloud image
@@ -271,7 +298,7 @@ class IronicNode(node.Node):
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
 
-        return result['stdout']
+        return ''.join(result['stdout'])
 
 
 class IronicInterface(network.Interface):
