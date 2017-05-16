@@ -5,7 +5,7 @@ Example for using with Ironic standalone service
 ------------------------------------------------
 
 1. Install fuel-devops and fuel-devops-driver-ironic
-====================================================
+----------------------------------------------------
 
     sudo apt-get install --yes \
         git libyaml-dev libffi-dev python-dev python-pip \
@@ -21,7 +21,7 @@ Example for using with Ironic standalone service
     dos-manage.py migrate
 
 2. [optional] Create a node with Ironic standalone service
-==========================================================
+----------------------------------------------------------
 
 You can use the steps from here: https://github.com/dis-xcom/underpillar ,
 or create a VM for ironic service using the devops template from this repo.
@@ -57,15 +57,15 @@ means that the Ironic has been deployed successfully.
 
 
 3. Deploy baremetal nodes with Ironic
-=====================================
+-------------------------------------
 
 IRONIC_URL is used to access Ironic API from fuel-devops.
 IRONIC_PXE_INTERFACE_ADDRESS is an address assigned to the interface on the Ironic node
 which is used for DHCP/PXE/HTTP access from the deploying baremetal nodes.
 
-If Ironic node was created in step #2, then on this node:
-- ens3 will have the IP 10.50.0.2/24 for external access (from the host),
-- ens4 will have 10.0.175.2 as a DHCP/PXE/HTTP server.
+If Ironic node was created in step #2, then on this node
+ens3 will have the IP 10.50.0.2/24 for external access (from the host),
+ens4 will have 10.0.175.2 as a DHCP/PXE/HTTP server.
 
     export OS_AUTH_TOKEN=fake-token
     export IRONIC_URL=http://10.50.0.2:6385/
@@ -87,4 +87,13 @@ If Ironic node was created in step #2, then on this node:
     dos.py create-env fuel-devops-driver-ironic/devops_driver_ironic/templates/deploy_nodes.yaml
 
 If all settings are Ok, Ironic will bootstrap the specified in the '../deploy_nodes.yaml' node using
-agent and will deploy the node using IRONIC_SOURCE_IMAGE_URL image and cloudinit user-data '../deploy_nodes--user-data.yaml'
+agent and will deploy the node using IRONIC_SOURCE_IMAGE_URL image and cloudinit user-data
+from '../deploy_nodes--user-data.yaml'.
+
+Deploy will take up to 10-15 minutes. Check the status of the nodes with:
+
+    ironic node-list
+
+Node is ready when "Provisioning State" is 'active' and "Power State" is 'power on'.
+But keep in mind, that at the first boot after deploy, cloudinit-based nodes will take
+some time to execute custom scripts from '../deploy_nodes--user-data.yaml'.
