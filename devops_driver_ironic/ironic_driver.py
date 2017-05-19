@@ -239,16 +239,16 @@ class IronicNode(node.Node):
     def remove(self, *args, **kwargs):
         super(IronicNode, self).remove()
         if self.uuid:
-            #if self.exists():
+            if self.exists():
             #    self.destroy()
-            logger.info("Removing Ironic node {0}(uuid={1})"
-                        .format(self.name, self.uuid))
+                logger.info("Removing Ironic node {0}(uuid={1})"
+                            .format(self.name, self.uuid))
 
-            self.driver.conn.node.set_maintenance(
-                node_id=self.uuid,
-                state=True,
-                maint_reason="Removing the node from devops environment")
-            self.driver.conn.node.delete(self.uuid)
+                self.driver.conn.node.set_maintenance(
+                    node_id=self.uuid,
+                    state=True,
+                    maint_reason="Removing the node from devops environment")
+                self.driver.conn.node.delete(self.uuid)
 
     def reboot(self):
         """Reboot node gracefully
