@@ -210,7 +210,7 @@ class IronicNode(node.Node):
 
     def start(self):
         """Start the node (power on)"""
-        logger.info("Starting Ironic node {0}(uuid={1}) with timeout={1}"
+        logger.info("Starting Ironic node {0}(uuid={1}) with timeout={2}"
                     .format(self.name, self.uuid, self.wait_active_timeout))
 
         self.wait_for_state(expected_state='active',
