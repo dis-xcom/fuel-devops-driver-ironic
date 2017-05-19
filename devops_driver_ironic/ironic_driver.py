@@ -14,11 +14,14 @@
 
 import os
 import shutil
+import time
 
 from django.conf import settings
 from ironicclient import client
+from ironicclient import exc
 
 from devops.helpers import cloud_image_settings
+from devops.helpers import decorators
 from devops.helpers import helpers
 from devops.helpers import subprocess_runner
 from devops import logger
@@ -86,6 +89,9 @@ class IronicNode(node.Node):
     ipmi_lan_interface = base.ParamField(default="lanplus")
     ipmi_port = base.ParamField(default=623)
 
+    # Required in cases of changed provisioning states
+    wait_active_timeout = base.ParamField(default=600)
+
     def exists(self):
         """Check if node exists
 
@@ -105,10 +111,11 @@ class IronicNode(node.Node):
 
     @property
     def ironic_node_name(self):
-        return helpers.underscored(
-            helpers.deepgetattr(self, 'group.environment.name'),
-            self.name,
-        ).replace("_", "-")
+        #return helpers.underscored(
+        #    helpers.deepgetattr(self, 'group.environment.name'),
+        #    self.name,
+        #).replace("_", "-")
+        return self.name.replace("_", "-")
 
     def define(self):
         """Define node
@@ -184,8 +191,31 @@ class IronicNode(node.Node):
         self.uuid = node.uuid
         super(IronicNode, self).define()
 
+    def wait_for_state(self, expected_state, timeout=600):
+        threshold = time.time() + timeout
+        while not timeout or time.time() < threshold:
+            try:
+                self.driver.conn.node.wait_for_provision_state(
+                    node_ident=self.uuid,
+                    expected_state='active',
+                    timeout=self.wait_active_timeout)
+                return
+            except exc.StateTransitionFailed:
+                # When node is deploying, there can be non-critical errors
+                # during state transitions, let's skip them.
+                time.sleep(10)
+        raise exc.StateTransitionTimeout(
+            'Node {0} with uuid={1} failed to reach state {2} in {3} seconds'
+            .format(self.name, self.uuid, expected_state, timeout))
+
     def start(self):
         """Start the node (power on)"""
+        logger.info("Starting Ironic node {0}(uuid={1}) with timeout={1}"
+                    .format(self.name, self.uuid, self.wait_active_timeout))
+
+        self.wait_for_state(expected_state='active',
+            timeout=self.wait_active_timeout)
+
         self.driver.conn.node.set_power_state(
             node_id=self.uuid,
             state='on',
@@ -195,17 +225,24 @@ class IronicNode(node.Node):
     def destroy(self, *args, **kwargs):
         """Stop the node (power off)"""
         super(IronicNode, self).destroy()
+
+        self.wait_for_state(expected_state='active',
+            timeout=self.wait_active_timeout)
+
         self.driver.conn.node.set_power_state(
             node_id=self.uuid,
             state='off',
             soft=False,
         )
 
+    @decorators.retry(Exception, count=10, delay=20)
     def remove(self, *args, **kwargs):
         super(IronicNode, self).remove()
         if self.uuid:
-            if self.exists():
-                self.destroy()
+            #if self.exists():
+            #    self.destroy()
+            logger.info("Removing Ironic node {0}(uuid={1})"
+                        .format(self.name, self.uuid))
 
             self.driver.conn.node.set_maintenance(
                 node_id=self.uuid,
@@ -213,13 +250,16 @@ class IronicNode(node.Node):
                 maint_reason="Removing the node from devops environment")
             self.driver.conn.node.delete(self.uuid)
 
-
     def reboot(self):
         """Reboot node gracefully
 
             :rtype : None
         """
         super(IronicNode, self).reboot()
+
+        self.wait_for_state(expected_state='active',
+            timeout=self.wait_active_timeout)
+
         self.driver.conn.node.set_power_state(
             node_id=self.uuid,
             state='reboot',
@@ -232,6 +272,10 @@ class IronicNode(node.Node):
             :rtype : None
         """
         super(IronicNode, self).shutdown()
+
+        self.wait_for_state(expected_state='active',
+            timeout=self.wait_active_timeout)
+
         self.driver.conn.node.set_power_state(
             node_id=self.uuid,
             state='off',
@@ -241,6 +285,10 @@ class IronicNode(node.Node):
     def reset(self):
         """Reboot node"""
         super(IronicNode, self).reset()
+
+        self.wait_for_state(expected_state='active',
+            timeout=self.wait_active_timeout)
+
         self.driver.conn.node.set_power_state(
             node_id=self.uuid,
             state='reboot',
