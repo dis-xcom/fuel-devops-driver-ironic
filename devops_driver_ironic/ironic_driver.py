@@ -90,7 +90,7 @@ class IronicNode(node.Node):
     ipmi_port = base.ParamField(default=623)
 
     # Required in cases of changed provisioning states
-    wait_active_timeout = base.ParamField(default=600)
+    wait_active_timeout = base.ParamField(default=900)
 
     def exists(self):
         """Check if node exists
