@@ -20,6 +20,7 @@ from django.conf import settings
 from ironicclient import client
 from ironicclient import exc
 
+from devops import error
 from devops.helpers import cloud_image_settings
 from devops.helpers import decorators
 from devops.helpers import helpers
@@ -92,13 +93,19 @@ class IronicNode(node.Node):
     # Required in cases of changed provisioning states
     wait_active_timeout = base.ParamField(default=900)
 
-    def exists(self):
+    def exists(self, timeout=5):
         """Check if node exists
 
             :rtype : Boolean
         """
-        return any([self.uuid == node.uuid
-                    for node in self.driver.conn.node.list()])
+        try:
+            with helpers.RunLimit(timeout):
+                return any([self.uuid == node.uuid
+                            for node in self.driver.conn.node.list()])
+        except error.TimeoutError:
+            logger.error("Ironic API is not responded for {0}sec, assuming "
+                         "that node {1} is absent".format(timeout, self.name))
+            return False
 
     def is_active(self):
         """Check if node is active
