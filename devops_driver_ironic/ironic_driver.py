@@ -107,14 +107,20 @@ class IronicNode(node.Node):
                          "that node {1} is absent".format(timeout, self.name))
             return False
 
-    def is_active(self):
+    def is_active(self, timeout=5):
         """Check if node is active
 
             :rtype : Boolean
         """
-        states = self.driver.conn.node.states(self.uuid)
-        return (states['provision_state'] == 'active' and
-                states['power_state'] == 'power on')
+        try:
+            with helpers.RunLimit(timeout):
+                states = self.driver.conn.node.states(self.uuid)
+                return (states['provision_state'] == 'active' and
+                        states['power_state'] == 'power on')
+        except error.TimeoutError:
+            logger.error("Ironic API is not responded for {0}sec, assuming "
+                         "that node {1} is absent".format(timeout, self.name))
+            return False
 
     @property
     def ironic_node_name(self):
@@ -233,14 +239,12 @@ class IronicNode(node.Node):
         """Stop the node (power off)"""
         super(IronicNode, self).destroy()
 
-        self.wait_for_state(expected_state='active',
-            timeout=self.wait_active_timeout)
-
-        self.driver.conn.node.set_power_state(
-            node_id=self.uuid,
-            state='off',
-            soft=False,
-        )
+        if self.is_active():
+            self.driver.conn.node.set_power_state(
+                node_id=self.uuid,
+                state='off',
+                soft=False,
+            )
 
     @decorators.retry(Exception, count=10, delay=20)
     def remove(self, *args, **kwargs):
