@@ -237,18 +237,16 @@ class IronicNode(node.Node):
 
     def destroy(self, *args, **kwargs):
         """Stop the node (power off)"""
-        super(IronicNode, self).destroy()
-
         if self.is_active():
             self.driver.conn.node.set_power_state(
                 node_id=self.uuid,
                 state='off',
                 soft=False,
             )
+        super(IronicNode, self).destroy()
 
     @decorators.retry(Exception, count=10, delay=20)
     def remove(self, *args, **kwargs):
-        super(IronicNode, self).remove()
         if self.uuid:
             if self.exists():
             #    self.destroy()
@@ -260,13 +258,13 @@ class IronicNode(node.Node):
                     state=True,
                     maint_reason="Removing the node from devops environment")
                 self.driver.conn.node.delete(self.uuid)
+        super(IronicNode, self).remove()
 
     def reboot(self):
         """Reboot node gracefully
 
             :rtype : None
         """
-        super(IronicNode, self).reboot()
 
         self.wait_for_state(expected_state='active',
             timeout=self.wait_active_timeout)
@@ -276,6 +274,7 @@ class IronicNode(node.Node):
             state='reboot',
             soft=True,
         )
+        super(IronicNode, self).reboot()
 
     def shutdown(self):
         """Shutdown node gracefully
