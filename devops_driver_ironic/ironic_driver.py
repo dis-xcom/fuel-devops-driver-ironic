@@ -148,6 +148,7 @@ class IronicNode(node.Node):
                 'ipmi_address': self.ipmi_host,
                 'ipmi_username': self.ipmi_user,
                 'ipmi_password': self.ipmi_password,
+                'ipmi_priv_level': self.ipmi_previlegies,
             }
         )
         logger.debug("Created Ironic node: {0}".format(node))
