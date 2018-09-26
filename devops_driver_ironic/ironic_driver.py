@@ -18,6 +18,7 @@ import time
 
 from django.conf import settings
 from ironicclient import client
+from ironicclient import common
 from ironicclient import exc
 
 from devops import error
@@ -48,6 +49,8 @@ class IronicDriver(driver.Driver):
     @property
     def conn(self):
         """Connection to ironic api"""
+        logger.debug("Ironic client is connecting to {0}"
+                     .format(self.ironic_url))
         kwargs = {'os_auth_token': self.os_auth_token,
                   'ironic_url': self.ironic_url}
         return client.get_client(1, **kwargs)
@@ -253,12 +256,15 @@ class IronicNode(node.Node):
             #    self.destroy()
                 logger.info("Removing Ironic node {0}(uuid={1})"
                             .format(self.name, self.uuid))
-
-                self.driver.conn.node.set_maintenance(
-                    node_id=self.uuid,
-                    state=True,
-                    maint_reason="Removing the node from devops environment")
-                self.driver.conn.node.delete(self.uuid)
+                try:
+                    self.driver.conn.node.set_maintenance(
+                        node_id=self.uuid,
+                        state=True,
+                        maint_reason="Removing the node from devops environment")
+                    self.driver.conn.node.delete(self.uuid)
+                except common.apiclient.exceptions.BadRequest:
+                    # Allow to remove node from fuel-devops if ironic API down
+                    pass
         super(IronicNode, self).remove()
 
     def reboot(self):
