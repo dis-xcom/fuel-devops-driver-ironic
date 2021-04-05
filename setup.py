@@ -37,7 +37,7 @@ setuptools.setup(
     tests_require=[
         'pytest>=2.7.1',
         'pytest-django >= 2.8.0',
-        'mock>=1.2',
+        'mock>=1.2,<4.0.0',
         'tox>=2.0'
     ],
 )
